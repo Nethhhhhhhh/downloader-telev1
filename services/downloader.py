@@ -57,6 +57,11 @@ class DownloaderService:
         if ffmpeg_location:
             opts['ffmpeg_location'] = os.path.dirname(ffmpeg_location) # yt-dlp expects the directory, not the exe
 
+        # Check for cookies.txt
+        cookies_path = os.path.join(self.download_path, "..", "cookies.txt")
+        if os.path.exists(cookies_path):
+             opts['cookiefile'] = cookies_path
+
         if is_audio:
             opts.update({
                 'format': 'bestaudio/best',
