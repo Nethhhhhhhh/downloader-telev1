@@ -1,0 +1,11 @@
+services:
+  - type: worker
+    name: teledown-bot
+    env: python
+    buildCommand: "./build.sh"
+    startCommand: "export PATH=\"$PATH:$(pwd)/bin\" && python main.py"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.0
+      - key: BOT_TOKEN
+        sync: false
