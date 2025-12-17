@@ -380,9 +380,43 @@ class DownloaderService:
             if og_video:
                 info['video'] = og_video.get('content')
             
-            # If we didn't find image/video (likely due to login wall despite UA spoofing),
-            # we might still proceed with just the resolved URL for yt-dlp to try.
-            
+            # Fallback: If no image found, try mbasic.facebook.com
+            if not info['image']:
+                logging.warning("No og:image found. Trying mbasic fallback...")
+                try:
+                    mbasic_url = final_url.replace("www.facebook.com", "mbasic.facebook.com").replace("web.facebook.com", "mbasic.facebook.com")
+                    if "mbasic.facebook.com" not in mbasic_url:
+                        # Handle case where URL might be just facebook.com
+                        mbasic_url = mbasic_url.replace("facebook.com", "mbasic.facebook.com")
+                    
+                    logging.info(f"Fetching mbasic URL: {mbasic_url}")
+                    # mbasic often works better with standard browser UA
+                    mbasic_headers = {
+                        'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36',
+                         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+                    }
+                    response_mb = session.get(mbasic_url, headers=mbasic_headers, timeout=10)
+                    soup_mb = BeautifulSoup(response_mb.text, 'html.parser')
+                    
+                    # Try to find finding image in mbasic (often in a div with data-ft or just an img inside a container)
+                    # Or check for standard og:image again (mbasic pages also have headers)
+                    og_image_mb = soup_mb.find("meta", property="og:image")
+                    if og_image_mb:
+                         info['image'] = og_image_mb.get('content')
+                         logging.info(f"Found image on mbasic: {info['image']}")
+                    else:
+                        # Try to find the first significant image
+                        images = soup_mb.find_all("img")
+                        for img in images:
+                            src = img.get('src')
+                            # Filter out small icons/emojis if possible (heuristic)
+                            if src and "htt" in src and "static" not in src and "emoji" not in src:
+                                info['image'] = src
+                                logging.info(f"Found simplified image on mbasic: {info['image']}")
+                                break
+                except Exception as e:
+                    logging.error(f"mbasic fallback failed: {e}")
+
             return info
         except Exception as e:
             logging.error(f"Error resolving Facebook share: {e}")
