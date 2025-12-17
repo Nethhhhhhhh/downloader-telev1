@@ -387,8 +387,8 @@ class DownloaderService:
                 return info
         except Exception as e:
             error_msg = str(e)
-            # Identify if it's the specific format error OR Unsupported URL (bad redirect)
-            if "No video formats found" in error_msg or "HTTP Error 400" in error_msg or "Unsupported URL" in error_msg:
+            # Identify if it's the specific format error OR Unsupported URL (bad redirect) OR Login required
+            if any(x in error_msg for x in ["No video formats found", "HTTP Error 400", "Unsupported URL", "registered users"]):
                 logging.warning(f"yt-dlp could not process link (expected for some FB shares): {error_msg}")
                 return None # Signal to try fallback
                 
