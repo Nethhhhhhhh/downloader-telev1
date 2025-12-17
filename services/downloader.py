@@ -144,8 +144,23 @@ class DownloaderService:
                 logging.info("yt-dlp failed, using Facebook fallback info.")
                 fallback = self._fb_fallback_info
                 
-                # Check for direct video if scrape found it but yt-dlp missed it?
-                # Unlikely to happen often, but let's prioritize image if that's what we have.
+                # Check for direct video first!
+                if fallback.get('video'):
+                    video_url = fallback['video']
+                    ext = 'mp4'
+                    video_path = os.path.join(self.download_path, f"{filename_id}.{ext}")
+                    
+                    logging.info("Fallback: Found video URL, downloading manually...")
+                    await loop.run_in_executor(None, lambda: self._download_file(video_url, video_path))
+                    
+                    return [{
+                        'type': MediaType.VIDEO,
+                        'path': video_path,
+                        'title': fallback.get('title', 'Facebook Video'),
+                        'group_id': filename_id
+                    }]
+
+                # Fallback to image if no video
                 if fallback.get('image'):
                     # Download the image manually
                     image_url = fallback['image']
@@ -438,6 +453,33 @@ class DownloaderService:
                                     info['image'] = m
                                     logging.info(f"Found image via regex match: {m}")
                                     break
+                    
+                    # Try to find video on mbasic (link or a tag)
+                    if not info['video']:
+                         # sometimes link rel="video_src" exists? likely not on mbasic but checking
+                         # more likely in a href to .mp4
+                         import re
+                         # Look for mp4 urls in source
+                         matches_mp4 = re.findall(r'"(https?://[^"]+?\.mp4[^"]*?)"', response_mb.text)
+                         ifMatches_mp4 = []
+                         # Also check hrefs
+                         a_tags = soup_mb.find_all("a", href=True)
+                         for a in a_tags:
+                             if ".mp4" in a['href']:
+                                 matches_mp4.append(a['href'])
+                         
+                         if matches_mp4:
+                             for m in matches_mp4:
+                                 # decode
+                                 try:
+                                     m = m.encode().decode('unicode-escape')
+                                 except:
+                                     pass
+                                 # Basic filtering
+                                 if "mp4" in m:
+                                     info['video'] = m
+                                     logging.info(f"Found video via regex/href: {m}")
+                                     break
 
                 except Exception as e:
                     logging.error(f"mbasic fallback failed: {e}")
