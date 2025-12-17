@@ -349,6 +349,14 @@ class DownloaderService:
                     next_url = unquote(params['next'][0])
                     logging.info(f"Extracted original URL from login redirect: {next_url}")
                     final_url = next_url
+                    
+                    # We must refetch the actual content page to get metadata!
+                    # The current response.text is the login page.
+                    try:
+                        logging.info(f"Refetching content from: {final_url}")
+                        response = session.get(final_url, allow_redirects=True, timeout=10)
+                    except Exception as e:
+                        logging.error(f"Failed to refetch content: {e}")
             
             soup = BeautifulSoup(response.text, 'html.parser')
             
