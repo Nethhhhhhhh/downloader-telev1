@@ -403,8 +403,15 @@ class DownloaderService:
                     og_image_mb = soup_mb.find("meta", property="og:image")
                     if og_image_mb:
                          info['image'] = og_image_mb.get('content')
-                         logging.info(f"Found image on mbasic: {info['image']}")
-                    else:
+                         logging.info(f"Found image on mbasic (meta): {info['image']}")
+                    
+                    if not info['image']:
+                        link_image = soup_mb.find("link", rel="image_src")
+                        if link_image:
+                            info['image'] = link_image.get('href')
+                            logging.info(f"Found image on mbasic (link): {info['image']}")
+
+                    if not info['image']:
                         # Try to find the first significant image
                         images = soup_mb.find_all("img")
                         for img in images:
@@ -412,8 +419,26 @@ class DownloaderService:
                             # Filter out small icons/emojis if possible (heuristic)
                             if src and "htt" in src and "static" not in src and "emoji" not in src:
                                 info['image'] = src
-                                logging.info(f"Found simplified image on mbasic: {info['image']}")
+                                logging.info(f"Found simplified image on mbasic (img tag): {info['image']}")
                                 break
+                    
+                    # Last resort: Regex for "k": or "m": (common in JSON blobs in script tags on mbasic/www)
+                    if not info['image']:
+                        import re
+                        # Look for jpg urls in script tags or source
+                        matches = re.findall(r'"(https?://[^"]+?\.jpg[^"]*?)"', response_mb.text)
+                        if matches:
+                            for m in matches:
+                                if "static" not in m and "emoji" not in m:
+                                    # decode unicode escapes if needed
+                                    try:
+                                        m = m.encode().decode('unicode-escape')
+                                    except:
+                                        pass
+                                    info['image'] = m
+                                    logging.info(f"Found image via regex match: {m}")
+                                    break
+
                 except Exception as e:
                     logging.error(f"mbasic fallback failed: {e}")
 
@@ -431,7 +456,8 @@ class DownloaderService:
             error_msg = str(e)
             # Identify if it's the specific format error OR Unsupported URL (bad redirect) OR Login required
             if any(x in error_msg for x in ["No video formats found", "HTTP Error 400", "Unsupported URL", "registered users"]):
-                logging.warning(f"yt-dlp could not process link (expected for some FB shares): {error_msg}")
+                # Changed to INFO to be less alarming, as this is a handled flow
+                logging.info(f"yt-dlp could not process link (trying fallback): {error_msg}")
                 return None # Signal to try fallback
                 
             logging.error(f"yt-dlp error: {e}")
